@@ -57,6 +57,8 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        RESONANCE_WEB_URL: ""
+        NSMicrophoneUsageDescription: "用于在共鸣网页中录制语音，并由你配置的服务进行语音识别。"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         CFBundleURLTypes:

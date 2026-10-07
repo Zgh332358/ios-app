@@ -42,10 +42,13 @@ jobs:
 
       - name: Build iOS Project
         id: build
+        env:
+          SCHEME: ${{ inputs.scheme }}
+          BUILD_CONFIGURATION: ${{ inputs.configuration }}
         run: |
           xcodebuild -project Resonance.xcodeproj \
-            -scheme ${{ inputs.scheme }} \
-            -configuration ${{ inputs.configuration }} \
+            -scheme "$SCHEME" \
+            -configuration "$BUILD_CONFIGURATION" \
             -destination 'generic/platform=iOS' \
             -archivePath build/Resonance.xcarchive \
             CODE_SIGN_IDENTITY="" \

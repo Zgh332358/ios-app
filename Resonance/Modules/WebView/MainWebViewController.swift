@@ -9,10 +9,9 @@ class MainWebViewController: UIViewController {
     private let refreshControl = UIRefreshControl()
 
     private var cancellables = Set<AnyCancellable>()
-    private let dnsResolver = DNSResolver()
     private let configurationService = ConfigurationService.shared
 
-    private var baseURL: String = "https://project-resonance.net"
+    private var loadedDestination: WebAppDestination?
     private var isLoading = false
 
     override func viewDidLoad() {
@@ -20,12 +19,12 @@ class MainWebViewController: UIViewController {
         setupUI()
         setupWebView()
         setupBindings()
-        discoverEndpoint()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
+        loadWebContent()
     }
 
     private func setupUI() {
@@ -98,31 +97,47 @@ class MainWebViewController: UIViewController {
             .store(in: &cancellables)
     }
 
-    private func discoverEndpoint() {
-        dnsResolver.delegate = self
-        dnsResolver.discoverEndpoint()
+    private func loadWebContent(forceReload: Bool = false) {
+        let destination = configurationService.getWebDestination()
+        guard forceReload || destination != loadedDestination else { return }
+        loadedDestination = destination
+        webView.stopLoading()
+        switch destination {
+        case .page(let url):
+            webView.load(URLRequest(url: url,
+                                    cachePolicy: .reloadIgnoringLocalCacheData,
+                                    timeoutInterval: 30))
+        case .unconfigured:
+            showConfigurationPage(message: "请在 Settings → Web App URL 中填写你部署的共鸣网页地址。")
+        case .invalid:
+            showConfigurationPage(message: "网页地址无效。请填写完整 HTTPS 地址；HTTP 仅支持本机 localhost、127.0.0.1 或 ::1 调试地址。地址不能包含用户名或密码。")
+        }
     }
 
-    private func loadWebContent() {
-        guard let url = URL(string: baseURL) else { return }
-
-        let request = URLRequest(url: url,
-                                cachePolicy: .reloadIgnoringLocalCacheData,
-                                timeoutInterval: 30)
-        webView.load(request)
+    private func showConfigurationPage(message: String) {
+        title = "Resonance"
+        progressView.isHidden = true
+        refreshControl.endRefreshing()
+        // Replacing the document also removes a previously loaded website after clearing settings.
+        webView.loadHTMLString("""
+        <!doctype html><html lang="zh-CN"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="font-family:system-ui;padding:32px;line-height:1.7"><h2>连接你的共鸣网页</h2>
+        <p>\(message)</p><p>StepFun API Key 和模型在网页服务端配置，无需填入此 App。</p></body></html>
+        """, baseURL: nil)
     }
 
     private func updateURL(_ url: URL?) {
-        guard let url = url else { return }
+        guard let destination = loadedDestination, case .page = destination,
+              let url = url else { return }
         title = url.host ?? "Resonance"
     }
 
     @objc private func handleRefresh() {
-        webView.reload()
+        loadWebContent(forceReload: true)
     }
 
     @objc private func reloadTapped() {
-        webView.reload()
+        loadWebContent(forceReload: true)
     }
 
     private func showError(message: String) {
@@ -131,7 +146,7 @@ class MainWebViewController: UIViewController {
                                       preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Retry",
                                      style: .default) { [weak self] _ in
-            self?.loadWebContent()
+            self?.loadWebContent(forceReload: true)
         })
         alert.addAction(UIAlertAction(title: "OK",
                                      style: .cancel))
@@ -185,7 +200,12 @@ extension MainWebViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        decisionHandler(.allow)
+        if let destination = loadedDestination, case .page = destination {
+            decisionHandler(.allow)
+        } else {
+            // History gestures must not restore a previous website after clearing its URL.
+            decisionHandler(navigationAction.request.url?.absoluteString == "about:blank" ? .allow : .cancel)
+        }
     }
 }
 
@@ -274,16 +294,5 @@ extension MainWebViewController: WKScriptMessageHandler {
            let responseString = String(data: responseJSON, encoding: .utf8) {
             evaluateJavaScript("window.nativeBridge.handleResponse('invokeLocalModel', \(responseString))")
         }
-    }
-}
-
-extension MainWebViewController: DNSResolverDelegate {
-    func dnsResolver(_ resolver: DNSResolver, didDiscoverEndpoint config: EndpointConfig) {
-        configurationService.setConfig(config)
-        loadWebContent()
-    }
-
-    func dnsResolver(_ resolver: DNSResolver, didFailWithError error: DNSError) {
-        loadWebContent()
     }
 }

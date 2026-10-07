@@ -52,6 +52,10 @@
             </array>
         </dict>
     </dict>
+    <key>RESONANCE_WEB_URL</key>
+    <string></string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>用于在共鸣网页中录制语音，并由你配置的服务进行语音识别。</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>

@@ -17,6 +17,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Test web app configuration
+        run: ./scripts/test-configuration.sh
+
       - name: Verify XcodeGen
         run: which xcodegen || brew install xcodegen
 
@@ -66,52 +69,3 @@ jobs:
         with:
           name: build-logs
           path: ~/Library/Developer/Xcode/DerivedData/**/Logs/**/*.xcresult
-
-  release:
-    needs: build
-    if: github.ref == 'refs/heads/release' && github.event_name == 'push'
-    runs-on: macos-14
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Verify XcodeGen
-        run: which xcodegen || brew install xcodegen
-
-      - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Build IPA
-        env:
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          xcodebuild -project Resonance.xcodeproj \
-            -scheme Resonance \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -quiet \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER=""
-
-      - name: Export IPA
-        if: success()
-        env:
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath build/Release-iphoneos/Resonance.xcarchive \
-            -exportPath build/Release-iphoneos \
-            -exportOptionsPlist Resonance/Resources/export_options.plist
-
-      - name: Upload IPA
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: resonance-ipa
-          path: build/Release-iphoneos/*.ipa
